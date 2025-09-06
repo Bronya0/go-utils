@@ -4,7 +4,12 @@ Golang安全的操作函数
 ## 使用
 ```go
 // go get github.com/Bronya0/SafeUtils
-import "github.com/Bronya0/SafeUtils"
+// 按需导入
+import(
+    "github.com/Bronya0/SafeUtils/archiveutil"
+    "github.com/Bronya0/SafeUtils/fileutil"
+    "github.com/Bronya0/SafeUtils/strutil"
+)
 ```
 
 ## 函数说明
