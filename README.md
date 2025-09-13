@@ -1,14 +1,14 @@
-# SafeUtils
+# Golang Safe Utils
 Golang安全的操作函数
 
 ## 使用
 ```go
-// go get github.com/Bronya0/SafeUtils
+// go get github.com/Bronya0/go-utils
 // 按需导入
 import(
-    "github.com/Bronya0/SafeUtils/archiveutil"
-    "github.com/Bronya0/SafeUtils/fileutil"
-    "github.com/Bronya0/SafeUtils/strutil"
+    "github.com/Bronya0/go-utils/archiveutil"
+    "github.com/Bronya0/go-utils/fileutil"
+    "github.com/Bronya0/go-utils/strutil"
 )
 ```
 
