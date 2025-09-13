@@ -6,7 +6,7 @@ Golang安全的操作函数
 // go get github.com/Bronya0/go-utils
 // 按需导入
 import(
-    "github.com/Bronya0/go-utils/archiveutil"
+    "github.com/Bronya0/go-utils/ziputil"
     "github.com/Bronya0/go-utils/fileutil"
     "github.com/Bronya0/go-utils/strutil"
 )
@@ -14,7 +14,7 @@ import(
 
 ## 函数说明
 
-### archiveutil 包
+### ziputil 包
 - UnzipSafe: 安全解压ZIP文件，防御路径遍历、解压炸弹等攻击
 
 ### fileutil 包
