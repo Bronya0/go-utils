@@ -13,7 +13,7 @@ import (
 // // --- 示例 1: 基本操作 (string类型) ---
 //
 //	fmt.Println("--- String Set Example ---")
-//	s1 := NewWithValues("apple", "banana", "cherry")
+//	s1 := NewSetWithValues("apple", "banana", "cherry")
 //	s1.Add("apple", "date")
 //	fmt.Printf("s1: %s, Length: %d\n", s1, s1.Len())
 //
@@ -24,8 +24,8 @@ import (
 //
 //	// --- 示例 2: 集合运算 (int类型) ---
 //	fmt.Println("\n--- Integer Set Operations ---")
-//	setA := NewWithValues(1, 2, 3, 4, 5)
-//	setB := NewWithValues(4, 5, 6, 7, 8)
+//	setA := NewSetWithValues(1, 2, 3, 4, 5)
+//	setB := NewSetWithValues(4, 5, 6, 7, 8)
 //	fmt.Printf("Set A: %s\n", setA)
 //	fmt.Printf("Set B: %s\n", setB)
 //
@@ -43,8 +43,8 @@ import (
 //
 //	// --- 示例 3: 子集和相等判断 ---
 //	fmt.Println("\n--- Subset and Equality ---")
-//	setC := NewWithValues(1, 2, 3)
-//	setD := NewWithValues(1, 2, 3, 4, 5)
+//	setC := NewSetWithValues(1, 2, 3)
+//	setD := NewSetWithValues(1, 2, 3, 4, 5)
 //	fmt.Printf("Set C: %s\n", setC)
 //	fmt.Printf("Set D: %s\n", setD)
 //	fmt.Printf("Is C a subset of A? %t\n", setC.IsSubset(setA))
@@ -66,34 +66,29 @@ type Set[T comparable] struct {
 	items map[T]struct{}
 }
 
-// New 创建并返回一个新的空集合。
-func New[T comparable]() *Set[T] {
+// NewSet 创建并返回一个新的空集合。
+func NewSet[T comparable]() *Set[T] {
 	return &Set[T]{
 		items: make(map[T]struct{}),
 	}
 }
 
-// NewWithValues 创建并返回一个包含初始值的新集合。
-func NewWithValues[T comparable](values ...T) *Set[T] {
-	s := New[T]()
+// NewSetWithValues 创建并返回一个包含初始值的新集合。
+func NewSetWithValues[T comparable](values ...T) *Set[T] {
+	s := NewSet[T]()
 	s.Add(values...)
 	return s
 }
 
 // Add 向集合中添加一个或多个元素。
 func (s *Set[T]) Add(values ...T) {
-	if len(values) == 0 {
-		return
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, value := range values {
-		s.items[value] = struct{}{}
-	}
+	s.AddUnSafe(values...)
 }
 
-// AddNoLock 无锁添加元素
-func (s *Set[T]) AddNoLock(values ...T) {
+// AddUnSafe 无锁添加元素
+func (s *Set[T]) AddUnSafe(values ...T) {
 	for _, value := range values {
 		s.items[value] = struct{}{}
 	}
@@ -101,11 +96,13 @@ func (s *Set[T]) AddNoLock(values ...T) {
 
 // Remove 从集合中移除一个或多个元素。
 func (s *Set[T]) Remove(values ...T) {
-	if len(values) == 0 {
-		return
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.RemoveUnSafe(values...)
+}
+
+// RemoveUnSafe 无锁移除元素
+func (s *Set[T]) RemoveUnSafe(values ...T) {
 	for _, value := range values {
 		delete(s.items, value)
 	}
@@ -115,6 +112,11 @@ func (s *Set[T]) Remove(values ...T) {
 func (s *Set[T]) Contains(value T) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.ContainsUnSafe(value)
+}
+
+// ContainsUnSafe 无锁检查元素
+func (s *Set[T]) ContainsUnSafe(value T) bool {
 	_, exists := s.items[value]
 	return exists
 }
@@ -123,7 +125,11 @@ func (s *Set[T]) Contains(value T) bool {
 func (s *Set[T]) Len() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	// Go 的 map 并发检测机制不区分操作类型
+	return s.LenUnSafe()
+}
+
+// LenUnSafe 无锁获取元素数量
+func (s *Set[T]) LenUnSafe() int {
 	return len(s.items)
 }
 
@@ -155,7 +161,13 @@ func (s *Set[T]) ToSlice() []T {
 func (s *Set[T]) Clone() *Set[T] {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	clone := New[T]()
+	return s.CloneUnSafe()
+}
+
+// CloneUnSafe 无锁拷贝
+func (s *Set[T]) CloneUnSafe() *Set[T] {
+	clone := NewSet[T]()
+	clone.items = make(map[T]struct{}, len(s.items))
 	for item := range s.items {
 		clone.items[item] = struct{}{}
 	}
@@ -168,8 +180,8 @@ func (s *Set[T]) String() string {
 	slice := s.ToSlice()
 	// 为了稳定的输出，尝试对 slice 进行排序
 	// 这里我们只处理几种常见类型，实际应用中可能需要更复杂的处理
-	sort.SliceStable(slice, func(i, j int) bool {
-		return fmt.Sprintf("%v", slice[i]) < fmt.Sprintf("%v", slice[j])
+	sort.Slice(slice, func(i, j int) bool {
+		return fmt.Sprint(slice[i]) < fmt.Sprint(slice[j])
 	})
 
 	var builder strings.Builder
@@ -221,13 +233,17 @@ func (s *Set[T]) Equal(other *Set[T]) bool {
 	return true
 }
 
-// Union 返回一个新集合，包含两个集合中的所有元素（并集）。
+// Union 并集。返回一个新集合，包含两个集合中的所有元素（并集）。
 func (s *Set[T]) Union(other *Set[T]) *Set[T] {
 	s.mu.RLock()
 	other.mu.RLock()
 	defer s.mu.RUnlock()
 	defer other.mu.RUnlock()
+	return s.UnionUnSafe(other)
+}
 
+// UnionUnSafe 无锁并集
+func (s *Set[T]) UnionUnSafe(other *Set[T]) *Set[T] {
 	// 确定较大和较小的集合
 	var smaller, larger *Set[T]
 	if len(s.items) < len(other.items) {
@@ -235,7 +251,13 @@ func (s *Set[T]) Union(other *Set[T]) *Set[T] {
 	} else {
 		smaller, larger = other, s
 	}
-	resultItems := make(map[T]struct{}, len(larger.items)+len(smaller.items)/2) // 预估容量
+
+	// 快速处理较小集合为空的情况
+	if len(smaller.items) == 0 {
+		return larger.Clone()
+	}
+
+	resultItems := make(map[T]struct{}, len(larger.items)+len(smaller.items)) // 预估容量
 
 	// 先复制较大集合
 	for item := range larger.items {
@@ -250,11 +272,16 @@ func (s *Set[T]) Union(other *Set[T]) *Set[T] {
 
 // Intersection 交集。返回一个新集合，包含同时存在于两个集合中的元素（交集）。
 func (s *Set[T]) Intersection(other *Set[T]) *Set[T] {
-	result := New[T]()
 	s.mu.RLock()
 	other.mu.RLock()
 	defer s.mu.RUnlock()
 	defer other.mu.RUnlock()
+
+	result := NewSet[T]()
+	// 如果任一集合为空，直接返回空集
+	if len(s.items) == 0 || len(other.items) == 0 {
+		return result
+	}
 
 	// 遍历较小的集合以提高性能
 	var smaller, larger *Set[T]
@@ -276,7 +303,7 @@ func (s *Set[T]) Intersection(other *Set[T]) *Set[T] {
 
 // Difference 差集。返回一个新集合，包含在当前集合中但不在另一个集合中的元素（差集 S - Other）。
 func (s *Set[T]) Difference(other *Set[T]) *Set[T] {
-	result := New[T]()
+	result := NewSet[T]()
 	s.mu.RLock()
 	other.mu.RLock()
 	defer s.mu.RUnlock()
@@ -294,9 +321,27 @@ func (s *Set[T]) Difference(other *Set[T]) *Set[T] {
 
 // SymmetricDifference 对称差集。返回一个新集合，包含只存在于其中一个集合中的元素（对称差集）。
 func (s *Set[T]) SymmetricDifference(other *Set[T]) *Set[T] {
-	diff1 := s.Difference(other)
-	diff2 := other.Difference(s)
-	return diff1.Union(diff2)
+	s.mu.RLock()
+	other.mu.RLock()
+	defer s.mu.RUnlock()
+	defer other.mu.RUnlock()
+	capacity := len(s.items) + len(other.items)
+	resultItems := make(map[T]struct{}, capacity)
+	// 1. 添加 s 中有，但 other 中没有的元素
+	for item := range s.items {
+		if _, exists := other.items[item]; !exists {
+			resultItems[item] = struct{}{}
+		}
+	}
+
+	// 2. 添加 other 中有，但 s 中没有的元素
+	for item := range other.items {
+		if _, exists := s.items[item]; !exists {
+			resultItems[item] = struct{}{}
+		}
+	}
+
+	return &Set[T]{items: resultItems}
 }
 
 // IsSubset 检查当前集合是否是另一个集合的子集。
