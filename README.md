@@ -28,3 +28,6 @@ import(
 
 ### container 包
 - `NewSet`: 创建set集合。提供了完善的操作API
+
+### validator 包
+- 提供了常用的高性能、准确的校验函数
