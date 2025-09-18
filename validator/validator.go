@@ -24,6 +24,18 @@ var (
 
 	// chineseIDCardRegexp 校验中国18位身份证号格式的正则表达式。
 	chineseIDCardRegexp = regexp.MustCompile(`^\d{17}(\d|X)$`)
+
+	// md5Regexp 校验MD5哈希值的正则表达式 (32个十六进制字符)。
+	md5Regexp = regexp.MustCompile(`^[a-fA-F0-9]{32}$`)
+
+	// sha1Regexp 校验SHA1哈希值的正则表达式 (40个十六进制字符)。
+	sha1Regexp = regexp.MustCompile(`^[a-fA-F0-9]{40}$`)
+
+	// sha256Regexp 校验SHA256哈希值的正则表达式 (64个十六进制字符)。
+	sha256Regexp = regexp.MustCompile(`^[a-fA-F0-9]{64}$`)
+
+	// sha512Regexp 校验SHA512哈希值的正则表达式 (128个十六进制字符)。
+	sha512Regexp = regexp.MustCompile(`^[a-fA-F0-9]{128}$`)
 )
 
 // IsIPv4 校验字符串是否为合法的 IPv4 地址。
@@ -211,4 +223,36 @@ func IsChineseIDCard(id string) bool {
 	}
 
 	return check[sum%11] == id[17]
+}
+
+// IsMD5 校验字符串是否为合法的MD5哈希值。
+// 规则：32个十六进制字符 (不区分大小写)。
+// @param s string: 待校验的字符串。
+// @return bool: 如果是合法的MD5哈希值则返回 true，否则返回 false。
+func IsMD5(s string) bool {
+	return md5Regexp.MatchString(s)
+}
+
+// IsSHA1 校验字符串是否为合法的SHA1哈希值。
+// 规则：40个十六进制字符 (不区分大小写)。
+// @param s string: 待校验的字符串。
+// @return bool: 如果是合法的SHA1哈希值则返回 true，否则返回 false。
+func IsSHA1(s string) bool {
+	return sha1Regexp.MatchString(s)
+}
+
+// IsSHA256 校验字符串是否为合法的SHA256哈希值。
+// 规则：64个十六进制字符 (不区分大小写)。
+// @param s string: 待校验的字符串。
+// @return bool: 如果是合法的SHA256哈希值则返回 true，否则返回 false。
+func IsSHA256(s string) bool {
+	return sha256Regexp.MatchString(s)
+}
+
+// IsSHA512 校验字符串是否为合法的SHA512哈希值。
+// 规则：128个十六进制字符 (不区分大小写)。
+// @param s string: 待校验的字符串。
+// @return bool: 如果是合法的SHA512哈希值则返回 true，否则返回 false。
+func IsSHA512(s string) bool {
+	return sha512Regexp.MatchString(s)
 }
