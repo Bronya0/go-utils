@@ -24,7 +24,7 @@ import(
 - `HashFile`: 对文件进行流式哈希计算
 
 ### strutil 包
-- `Join`: 高效字符串拼接，使用strings.Builder避免中间对象过多
+- `JoinStr`: 高效字符串拼接，使用strings.Builder避免中间对象过多
 
 ### container 包
 - `NewSet`: 创建set集合。提供了完善的操作API
