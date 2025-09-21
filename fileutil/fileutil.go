@@ -2,6 +2,7 @@ package fileutil
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -194,4 +195,48 @@ func DirSize(path string) (int64, error) {
 		return nil
 	})
 	return size, err
+}
+
+// CopyDir 递归复制目录
+func CopyDir(srcPath string, dstPath string, mode os.FileMode) error {
+	if mode == 0 {
+		mode = 0755
+	}
+	srcInfo, err := os.Stat(srcPath)
+	if err != nil {
+		return fmt.Errorf("failed to get source directory info: %w", err)
+	}
+
+	if !srcInfo.IsDir() {
+		return fmt.Errorf("source path is not a directory: %s", srcPath)
+	}
+
+	err = os.MkdirAll(dstPath, mode)
+	if err != nil {
+		return fmt.Errorf("failed to create destination directory: %w", err)
+	}
+
+	entries, err := os.ReadDir(srcPath)
+	if err != nil {
+		return fmt.Errorf("failed to read source directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		srcDir := filepath.Join(srcPath, entry.Name())
+		dstDir := filepath.Join(dstPath, entry.Name())
+
+		if entry.IsDir() {
+			err := CopyDir(srcDir, dstDir, mode)
+			if err != nil {
+				return err
+			}
+		} else {
+			err := CopyFile(srcDir, dstDir)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
