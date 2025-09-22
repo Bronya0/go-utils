@@ -1,446 +1,472 @@
 package container
 
 import (
-	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 	"testing"
 )
 
-// assertEqual is a helper function to simplify checking for equality in tests.
-func assertEqual[T comparable](t *testing.T, a, b T) {
-	t.Helper()
-	if a != b {
-		t.Errorf("Expected %v, but got %v", b, a)
-	}
-}
+// --- 单元测试 (Unit Tests) ---
 
-// TestNewSet tests the constructors NewSet() and NewSetWithValues().
 func TestNewSet(t *testing.T) {
-	s := NewSet[int]()
-	if s == nil {
-		t.Fatal("NewSet() returned nil")
+	s := NewSet(1, 2, 3)
+	if s.concurrent {
+		t.Error("NewSet should create a non-concurrent set")
 	}
-	assertEqual(t, s.Len(), 0)
-
-	s2 := NewSet(1, 2, 3, 2) // duplicates should be ignored
-	assertEqual(t, s2.Len(), 3)
-	if !s2.Contains(1) || !s2.Contains(2) || !s2.Contains(3) {
-		t.Errorf("NewSetWithValues() did not initialize with correct elements")
+	if s.Len() != 3 {
+		t.Errorf("Expected length 3, got %d", s.Len())
+	}
+	if !s.Contains(2) {
+		t.Error("Set should contain 2")
 	}
 }
 
-// TestNewConcurrentSet tests the constructors TestNewConcurrentSet()
 func TestNewConcurrentSet(t *testing.T) {
+	s := NewConcurrentSet("a", "b")
+	if !s.concurrent {
+		t.Error("NewConcurrentSet should create a concurrent set")
+	}
+	if s.Len() != 2 {
+		t.Errorf("Expected length 2, got %d", s.Len())
+	}
+	if !s.Contains("b") {
+		t.Error("Set should contain 'b'")
+	}
+}
+
+func TestAdd(t *testing.T) {
 	s := NewSet[int]()
-	if s == nil {
-		t.Fatal("NewSet() returned nil")
+	s.Add(1)
+	if !s.Contains(1) {
+		t.Error("Failed to add single element")
 	}
-	assertEqual(t, s.Len(), 0)
-
-	s2 := NewConcurrentSet(1, 2, 3, 2) // duplicates should be ignored
-	assertEqual(t, s2.Len(), 3)
-	if !s2.Contains(1) || !s2.Contains(2) || !s2.Contains(3) {
-		t.Errorf("NewSetWithValues() did not initialize with correct elements")
+	s.Add(2, 3, 2) // Add multiple, including a duplicate
+	if s.Len() != 3 {
+		t.Errorf("Expected length 3, got %d", s.Len())
+	}
+	if !s.Contains(3) {
+		t.Error("Failed to add multiple elements")
 	}
 }
 
-// TestSetBasicOperations tests Add, Remove, Contains, Len, IsEmpty, and Clear.
-func TestSetBasicOperations(t *testing.T) {
-	s := NewSet[string]()
+func TestRemove(t *testing.T) {
+	s := NewSet(1, 2, 3, 4)
+	s.Remove(2)
+	if s.Contains(2) {
+		t.Error("Failed to remove single element")
+	}
+	s.Remove(3, 1, 5) // Remove multiple, including a non-existent element
+	if s.Len() != 1 {
+		t.Errorf("Expected length 1 after removal, got %d", s.Len())
+	}
+	if s.Contains(1) || s.Contains(3) {
+		t.Error("Failed to remove multiple elements")
+	}
+	if !s.Contains(4) {
+		t.Error("Element 4 should still be in the set")
+	}
+}
 
-	// Test IsEmpty on new set
-	assertEqual(t, s.IsEmpty(), true)
+func TestContains(t *testing.T) {
+	s := NewSet("apple", "banana")
+	if !s.Contains("apple") {
+		t.Error("'apple' should be in the set")
+	}
+	if s.Contains("cherry") {
+		t.Error("'cherry' should not be in the set")
+	}
+}
 
-	// Test Add
-	s.Add("apple")
-	s.Add("banana")
-	assertEqual(t, s.Len(), 2)
-	assertEqual(t, s.Contains("apple"), true)
-	assertEqual(t, s.IsEmpty(), false)
+func TestLen(t *testing.T) {
+	s := NewSet[int]()
+	if s.Len() != 0 {
+		t.Errorf("Expected length 0 for new set, got %d", s.Len())
+	}
+	s.Add(1, 2)
+	if s.Len() != 2 {
+		t.Errorf("Expected length 2, got %d", s.Len())
+	}
+}
 
-	// Test adding a duplicate
-	s.Add("apple")
-	assertEqual(t, s.Len(), 2)
+func TestIsEmpty(t *testing.T) {
+	s := NewSet[int]()
+	if !s.IsEmpty() {
+		t.Error("New set should be empty")
+	}
+	s.Add(1)
+	if s.IsEmpty() {
+		t.Error("Set with one element should not be empty")
+	}
+	s.Remove(1)
+	if !s.IsEmpty() {
+		t.Error("Set should be empty after removing its only element")
+	}
+}
 
-	// Test Remove
-	s.Remove("apple")
-	assertEqual(t, s.Len(), 1)
-	assertEqual(t, s.Contains("apple"), false)
-
-	// Test removing a non-existent element
-	s.Remove("grape")
-	assertEqual(t, s.Len(), 1)
-
-	// Test Clear
+func TestClear(t *testing.T) {
+	s := NewSet(1, 2, 3)
 	s.Clear()
-	assertEqual(t, s.Len(), 0)
-	assertEqual(t, s.IsEmpty(), true)
-	assertEqual(t, s.Contains("banana"), false)
+	if !s.IsEmpty() {
+		t.Error("Set should be empty after Clear()")
+	}
+	if s.Len() != 0 {
+		t.Error("Set length should be 0 after Clear()")
+	}
 }
 
-// TestToSliceAndClone tests ToSlice and Clone methods.
-func TestToSliceAndClone(t *testing.T) {
-	s := NewSet("a", "b", "c")
-	// Test ToSlice
+func TestToSlice(t *testing.T) {
+	s := NewSet("c", "a", "b")
 	slice := s.ToSlice()
-	assertEqual(t, len(slice), 3)
-	// Sort to have a predictable order for comparison
+	if len(slice) != 3 {
+		t.Fatalf("Expected slice length 3, got %d", len(slice))
+	}
+
+	// Sort to ensure consistent order for comparison
 	sort.Strings(slice)
-	expectedSlice := []string{"a", "b", "c"}
-	if fmt.Sprintf("%v", slice) != fmt.Sprintf("%v", expectedSlice) {
-		t.Errorf("ToSlice() returned %v, expected %v", slice, expectedSlice)
-	}
-
-	// Test Clone
-	clone := s.Clone()
-	if !s.Equal(clone) {
-		t.Errorf("Clone should be equal to the original set")
-	}
-	// Modify original, clone should not be affected
-	s.Add("d")
-	if s.Equal(clone) {
-		t.Errorf("Clone should not be affected by changes to the original set")
+	expected := []string{"a", "b", "c"}
+	for i := range slice {
+		if slice[i] != expected[i] {
+			t.Errorf("Expected slice %v, got %v", expected, slice)
+			break
+		}
 	}
 }
 
-// TestSetEquality tests the Equal method.
-func TestSetEquality(t *testing.T) {
-	s1 := NewSet(1, 2, 3)
-	s2 := NewSet(3, 2, 1)
-	s3 := NewSet(1, 2, 4)
-	s4 := NewSet(1, 2)
+func TestClone(t *testing.T) {
+	s1 := NewConcurrentSet(1, 2)
+	s2 := s1.Clone()
 
-	assertEqual(t, s1.Equal(s2), true)
-	assertEqual(t, s1.Equal(s3), false)
-	assertEqual(t, s1.Equal(s4), false)
-	assertEqual(t, s4.Equal(s1), false)
-	assertEqual(t, s1.Equal(s1), true)
+	if !s2.concurrent {
+		t.Error("Cloned set should be concurrent")
+	}
+	if !s1.Equal(s2) {
+		t.Error("Cloned set should be equal to the original")
+	}
+	s2.Add(3)
+	if s1.Contains(3) {
+		t.Error("Changes to cloned set should not affect the original")
+	}
 }
 
-// TestSetAlgebra tests Union, Intersection, Difference, and SymmetricDifference.
-func TestSetAlgebra(t *testing.T) {
+func TestString(t *testing.T) {
+	s := NewSet(3, 1, 2)
+	expected := "Set{1, 2, 3}"
+	if s.String() != expected {
+		t.Errorf("Expected string '%s', got '%s'", expected, s.String())
+	}
+}
+
+func TestEach(t *testing.T) {
+	s := NewConcurrentSet(1, 2, 3)
+	sum := 0
+	s.Each(func(item int) bool {
+		sum += item
+		return true
+	})
+	if sum != 6 {
+		t.Errorf("Expected sum 6 from Each, got %d", sum)
+	}
+
+	// Test early exit
+	count := 0
+	s.Each(func(item int) bool {
+		count++
+		return item != 2 // Stop when item is 2
+	})
+	if count > 2 {
+		t.Errorf("Each did not exit early, count was %d", count)
+	}
+}
+
+func TestEqual(t *testing.T) {
+	s1 := NewSet(1, 2)
+	s2 := NewSet(2, 1)
+	s3 := NewConcurrentSet(1, 2)
+	s4 := NewSet(1, 2, 3)
+
+	if !s1.Equal(s2) {
+		t.Error("s1 and s2 should be equal")
+	}
+	if !s1.Equal(s3) {
+		t.Error("s1 and s3 should be equal (concurrent vs non-concurrent)")
+	}
+	if s1.Equal(s4) {
+		t.Error("s1 and s4 should not be equal")
+	}
+}
+
+func TestSetOperations(t *testing.T) {
 	s1 := NewSet(1, 2, 3, 4)
-	s2 := NewSet(3, 4, 5, 6)
+	s2 := NewConcurrentSet(3, 4, 5, 6)
 
 	// Union
 	union := s1.Union(s2)
-	expectedUnion := NewSet(1, 2, 3, 4, 5, 6)
-	if !union.Equal(expectedUnion) {
-		t.Errorf("Union failed. Expected %v, got %v", expectedUnion, union)
+	assertSetElements(t, union, "Union", 1, 2, 3, 4, 5, 6)
+	if !union.concurrent {
+		t.Error("Union of a concurrent set should be concurrent")
 	}
 
 	// Intersection
 	intersection := s1.Intersection(s2)
-	expectedIntersection := NewSet(3, 4)
-	if !intersection.Equal(expectedIntersection) {
-		t.Errorf("Intersection failed. Expected %v, got %v", expectedIntersection, intersection)
+	assertSetElements(t, intersection, "Intersection", 3, 4)
+	if !intersection.concurrent {
+		t.Error("Intersection of a concurrent set should be concurrent")
 	}
 
-	// Difference (s1 - s2)
-	difference := s1.Difference(s2)
-	expectedDifference := NewSet(1, 2)
-	if !difference.Equal(expectedDifference) {
-		t.Errorf("Difference failed. Expected %v, got %v", expectedDifference, difference)
-	}
+	// Difference
+	diff := s1.Difference(s2)
+	assertSetElements(t, diff, "Difference", 1, 2)
 
 	// Symmetric Difference
-	symDifference := s1.SymmetricDifference(s2)
-	expectedSymDifference := NewSet(1, 2, 5, 6)
-	if !symDifference.Equal(expectedSymDifference) {
-		t.Errorf("SymmetricDifference failed. Expected %v, got %v", expectedSymDifference, symDifference)
-	}
+	symDiff := s1.SymmetricDifference(s2)
+	assertSetElements(t, symDiff, "SymmetricDifference", 1, 2, 5, 6)
 }
 
-// TestSubsets tests IsSubset and IsSuperset.
 func TestSubsets(t *testing.T) {
-	s1 := NewSet(1, 2, 3, 4)
-	s2 := NewSet(2, 3)
-	s3 := NewSet(2, 3, 5)
+	superset := NewConcurrentSet(1, 2, 3, 4)
+	subset := NewSet(2, 3)
+	disjoint := NewSet(5, 6)
 
-	assertEqual(t, s2.IsSubset(s1), true)
-	assertEqual(t, s1.IsSuperset(s2), true)
-
-	assertEqual(t, s3.IsSubset(s1), false)
-	assertEqual(t, s1.IsSuperset(s3), false)
-
-	assertEqual(t, s1.IsSubset(s1), true) // A set is a subset of itself
-	assertEqual(t, s1.IsSuperset(s1), true)
-}
-
-// TestEach tests the Each method for iteration.
-func TestEach(t *testing.T) {
-	s := NewSet(10, 20, 30)
-	sum := 0
-	s.Each(func(item int) bool {
-		sum += item
-		return true // continue iteration
-	})
-	assertEqual(t, sum, 60)
-
-	// Test early exit
-	count := 0
-	stoppedAt20 := false
-	s.Each(func(item int) bool {
-		count++
-		if item == 20 {
-			stoppedAt20 = true
-			return false // stop here
-		}
-		return true
-	})
-	if !stoppedAt20 {
-		t.Errorf("Expected to stop at item 20, but didn't")
+	if !subset.IsSubset(superset) {
+		t.Error("subset should be a subset of superset")
+	}
+	if superset.IsSubset(subset) {
+		t.Error("superset should not be a subset of subset")
+	}
+	if !superset.IsSuperset(subset) {
+		t.Error("superset should be a superset of subset")
+	}
+	if subset.IsSuperset(superset) {
+		t.Error("subset should not be a superset of superset")
+	}
+	if disjoint.IsSubset(superset) {
+		t.Error("disjoint set should not be a subset")
 	}
 }
 
-// TestSetConcurrency is crucial for a thread-safe set.
-// It runs multiple goroutines to add and remove items concurrently.
-// Run with `go test -race` to detect race conditions.
-func TestSetConcurrency(t *testing.T) {
-	s := NewSet[int]()
-	var wg sync.WaitGroup
-	numGoroutines := 100
-	itemsPerGoroutine := 100
+// --- 并发安全测试 (Concurrency Tests) ---
 
-	// Concurrent additions
-	wg.Add(numGoroutines)
-	for i := 0; i < numGoroutines; i++ {
+// TestConcurrentAddRemoveContains tests basic thread safety of Add, Remove, and Contains.
+func TestConcurrentAddRemoveContains(t *testing.T) {
+	s := NewConcurrentSet[int]()
+	var wg sync.WaitGroup
+	numRoutines := 50
+	itemsPerRoutine := 100
+
+	// Concurrent Add
+	for i := 0; i < numRoutines; i++ {
+		wg.Add(1)
 		go func(start int) {
 			defer wg.Done()
-			for j := 0; j < itemsPerGoroutine; j++ {
+			for j := 0; j < itemsPerRoutine; j++ {
 				s.Add(start + j)
 			}
-		}(i * itemsPerGoroutine)
+		}(i * itemsPerRoutine)
 	}
 	wg.Wait()
 
-	expectedLen := numGoroutines * itemsPerGoroutine
-	assertEqual(t, s.Len(), expectedLen)
+	expectedLen := numRoutines * itemsPerRoutine
+	if s.Len() != expectedLen {
+		t.Fatalf("Expected length %d after concurrent Add, got %d", expectedLen, s.Len())
+	}
 
-	// Concurrent removals
-	wg.Add(numGoroutines)
-	for i := 0; i < numGoroutines; i++ {
+	// Concurrent Contains
+	for i := 0; i < expectedLen; i++ {
+		wg.Add(1)
+		go func(val int) {
+			defer wg.Done()
+			if !s.Contains(val) {
+				t.Errorf("Set should contain %d after concurrent adds", val)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	// Concurrent Remove
+	for i := 0; i < numRoutines; i++ {
+		wg.Add(1)
 		go func(start int) {
 			defer wg.Done()
-			for j := 0; j < itemsPerGoroutine; j++ {
+			for j := 0; j < itemsPerRoutine; j++ {
 				s.Remove(start + j)
 			}
-		}(i * itemsPerGoroutine)
+		}(i * itemsPerRoutine)
 	}
 	wg.Wait()
 
-	assertEqual(t, s.Len(), 0)
-}
-
-// --- Benchmarks ---
-
-// createSetWithNItems is a helper for benchmark setup.
-func createSetWithNItems(n int) *Set[int] {
-	s := NewSet[int]()
-	for i := 0; i < n; i++ {
-		s.Add(i)
-	}
-	return s
-}
-
-func BenchmarkAdd(b *testing.B) {
-	s := NewSet[int]()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		s.Add(i)
+	if !s.IsEmpty() {
+		t.Errorf("Set should be empty after concurrent Remove, but length is %d", s.Len())
 	}
 }
 
-func BenchmarkAddUnSafe(b *testing.B) {
-	s := NewSet[int]()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		s.Add(i)
+// TestConcurrentSetOperations_NoDeadlock verifies that the deadlock fix works.
+func TestConcurrentSetOperations_NoDeadlock(t *testing.T) {
+	s1 := NewConcurrentSet(1, 2, 3)
+	s2 := NewConcurrentSet(3, 4, 5)
+
+	var wg sync.WaitGroup
+
+	// Test multiple operations that lock two sets
+	operations := map[string]func(){
+		"Union":               func() { s1.Union(s2); s2.Union(s1) },
+		"Intersection":        func() { s1.Intersection(s2); s2.Intersection(s1) },
+		"Difference":          func() { s1.Difference(s2); s2.Difference(s1) },
+		"SymmetricDifference": func() { s1.SymmetricDifference(s2); s2.SymmetricDifference(s1) },
+		"Equal":               func() { s1.Equal(s2); s2.Equal(s1) },
+		"IsSubset":            func() { s1.IsSubset(s2); s2.IsSubset(s1) },
+		"IsSuperset":          func() { s1.IsSuperset(s2); s2.IsSuperset(s1) },
+	}
+
+	for name, op := range operations {
+		t.Run(name, func(t *testing.T) {
+			done := make(chan bool)
+			wg.Add(2)
+
+			// Run the operations in opposite order in two goroutines
+			go func() {
+				defer wg.Done()
+				op()
+			}()
+			go func() {
+				defer wg.Done()
+				op()
+			}()
+
+			go func() {
+				wg.Wait()
+				close(done)
+			}()
+
+			// This test will time out if a deadlock occurs
+			select {
+			case <-done:
+				// Success, test finished
+			}
+		})
 	}
 }
 
-func BenchmarkContains(b *testing.B) {
-	s := createSetWithNItems(10000)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		s.Contains(5000) // Element that is always present
-	}
-}
+// --- 基准测试 (Benchmarks) ---
 
-func BenchmarkContainsUnSafe(b *testing.B) {
-	s := createSetWithNItems(10000)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		s.Contains(5000) // Element that is always present
-	}
-}
+var (
+	numBenchmarkItems = 1000
+	nonConcurrentSet  *Set[string]
+	concurrentSet     *Set[string]
+	otherSet          *Set[string] // For binary operations
+)
 
-func BenchmarkRemove(b *testing.B) {
-	// We need to re-populate the set on each run of the benchmark loop
-	// to ensure we are always removing from a set of a similar size.
-	b.StopTimer()
-	s := createSetWithNItems(b.N)
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		s.Remove(i)
-	}
-}
-
-func BenchmarkRemoveUnSafe(b *testing.B) {
-	// We need to re-populate the set on each run of the benchmark loop
-	// to ensure we are always removing from a set of a similar size.
-	b.StopTimer()
-	s := createSetWithNItems(b.N)
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		s.Remove(i)
-	}
-}
-
-// --- 辅助函数 ---
-
-// generateIntSet 创建一个包含指定数量整数的集合，用于测试。
-// 元素从 0 到 size-1。
-func generateIntSet(size int) *Set[int] {
-	s := NewSet[int]()
-	for i := 0; i < size; i++ {
-		s.items[i] = struct{}{} // 使用无锁的方式快速填充
-	}
-	return s
-}
-
-// runSetOperationBenchmark 是一个通用的基准测试函数，用于测试需要两个集合作为输入的运算
-func runSetOperationBenchmark(b *testing.B, operation func(s1, s2 *Set[int]) any) {
-	sizes := []int{10000}
-	overlaps := []float64{0.2, 0.8} // 测试 50%, 100% 重叠的情况
-
-	for _, size := range sizes {
-		for _, overlap := range overlaps {
-			name := fmt.Sprintf("%d-%.0f%%", size, overlap*100)
-			b.Run(name, func(b *testing.B) {
-				// s1 包含 [0, size-1]
-				s1 := generateIntSet(size)
-				// s2 根据重叠度计算元素
-				overlapCount := int(float64(size) * overlap)
-				s2 := NewSet[int]()
-				// 添加重叠部分: [0, overlapCount-1]
-				for i := 0; i < overlapCount; i++ {
-					s2.Add(i)
-				}
-				// 添加非重叠部分: [size, size + (size-overlapCount) - 1]
-				for i := 0; i < size-overlapCount; i++ {
-					s2.Add(size + i)
-				}
-
-				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
-					operation(s1, s2)
-				}
-			})
+// go测试文件（_test.go）中的 init 函数会不会随着整个项目的启动而运行
+func init() {
+	nonConcurrentSet = NewSet[string]()
+	concurrentSet = NewConcurrentSet[string]()
+	otherSet = NewSet[string]()
+	for i := 0; i < numBenchmarkItems; i++ {
+		item := "item" + strconv.Itoa(i)
+		nonConcurrentSet.Add(item)
+		concurrentSet.Add(item)
+		if i%2 == 0 { // Let otherSet have half the items
+			otherSet.Add(item)
 		}
 	}
 }
 
-func BenchmarkEqual(b *testing.B) {
-	sizes := []int{10000}
-	for _, size := range sizes {
-		s1 := generateIntSet(size)
-		s2 := generateIntSet(size) // 与 s1 完全相同
-		s3 := generateIntSet(size)
-		s3.Add(size + 1) // 比 s1 多一个元素
+// Add
+func BenchmarkSet_Add(b *testing.B) {
+	b.ReportAllocs() // 显式报告内存分配
 
-		b.Run(fmt.Sprintf("True-%d", size), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				s1.Equal(s2)
-			}
-		})
-
-		b.Run(fmt.Sprintf("False-%d", size), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				s1.Equal(s3)
-			}
-		})
+	s := NewSet[int]()
+	for i := 0; i < b.N; i++ {
+		s.Add(i)
 	}
 }
 
-func BenchmarkUnion(b *testing.B) {
-	runSetOperationBenchmark(b, func(s1, s2 *Set[int]) any {
-		return s1.Union(s2)
+func BenchmarkConcurrentSet_Add(b *testing.B) {
+	b.ReportAllocs() // 显式报告内存分配
+
+	s := NewConcurrentSet[int]()
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			s.Add(i)
+			i++
+		}
 	})
 }
 
-func BenchmarkUnionUnSafe(b *testing.B) {
-	runSetOperationBenchmark(b, func(s1, s2 *Set[int]) any {
-		return s1.Union(s2)
-	})
-}
-
-func BenchmarkIntersection(b *testing.B) {
-	runSetOperationBenchmark(b, func(s1, s2 *Set[int]) any {
-		return s1.Intersection(s2)
-	})
-}
-
-func BenchmarkDifference(b *testing.B) {
-	runSetOperationBenchmark(b, func(s1, s2 *Set[int]) any {
-		return s1.Difference(s2)
-	})
-}
-
-func BenchmarkSymmetricDifference(b *testing.B) {
-	runSetOperationBenchmark(b, func(s1, s2 *Set[int]) any {
-		return s1.SymmetricDifference(s2)
-	})
-}
-
-func BenchmarkIsSubset(b *testing.B) {
-	sizes := []int{100, 1000, 10000}
-	for _, size := range sizes {
-		superSet := generateIntSet(size)   // 超集: [0, size-1]
-		subSet := generateIntSet(size / 2) // 真子集: [0, size/2 - 1]
-		notSubSet := generateIntSet(size / 2)
-		notSubSet.Add(size + 1) // 包含一个超集里没有的元素
-
-		b.Run(fmt.Sprintf("True-%d", size), func(b *testing.B) {
-			var r bool
-			for i := 0; i < b.N; i++ {
-				r = subSet.IsSubset(superSet)
-			}
-			_ = r
-		})
-
-		b.Run(fmt.Sprintf("False-%d", size), func(b *testing.B) {
-			var r bool
-			for i := 0; i < b.N; i++ {
-				r = notSubSet.IsSubset(superSet)
-			}
-			_ = r
-		})
+// Contains
+func BenchmarkSet_Contains(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		nonConcurrentSet.Contains("item" + strconv.Itoa(i%numBenchmarkItems))
 	}
 }
 
-func BenchmarkIsSuperset(b *testing.B) {
-	sizes := []int{100, 1000, 10000}
-	for _, size := range sizes {
-		superSet := generateIntSet(size)   // 超集: [0, size-1]
-		subSet := generateIntSet(size / 2) // 真子集: [0, size/2 - 1]
+func BenchmarkConcurrentSet_Contains(b *testing.B) {
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			concurrentSet.Contains("item" + strconv.Itoa(i%numBenchmarkItems))
+			i++
+		}
+	})
+}
 
-		b.Run(fmt.Sprintf("True-%d", size), func(b *testing.B) {
-			var r bool
-			for i := 0; i < b.N; i++ {
-				r = superSet.IsSuperset(subSet)
-			}
-			_ = r
-		})
+// Remove
+func BenchmarkSet_Remove(b *testing.B) {
+	b.ReportAllocs()
+	s := NewSet[string]()
+	for i := 0; i < b.N; i++ {
+		item := "item" + strconv.Itoa(i)
+		s.Add(item)
+		s.Remove(item)
+	}
+}
 
-		b.Run(fmt.Sprintf("False-%d", size), func(b *testing.B) {
-			var r bool
-			for i := 0; i < b.N; i++ {
-				// IsSuperset 的 False case 是 IsSubset 的反向情况
-				r = subSet.IsSuperset(superSet)
-			}
-			_ = r
-		})
+func BenchmarkConcurrentSet_Remove(b *testing.B) {
+	b.ReportAllocs()
+	s := NewConcurrentSet[string]()
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			item := "item" + strconv.Itoa(i)
+			s.Add(item)
+			s.Remove(item)
+			i++
+		}
+	})
+}
+
+// Union
+func BenchmarkSet_Union(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		nonConcurrentSet.Union(otherSet)
+	}
+}
+
+func BenchmarkConcurrentSet_Union(b *testing.B) {
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			concurrentSet.Union(otherSet)
+		}
+	})
+}
+
+// --- Helper Functions ---
+
+// assertSetElements checks if a set contains exactly the given elements.
+func assertSetElements[T comparable](t *testing.T, s *Set[T], opName string, elements ...T) {
+	t.Helper()
+	if s.Len() != len(elements) {
+		t.Errorf("%s: Expected length %d, got %d. Set: %s", opName, len(elements), s.Len(), s.String())
+		return
+	}
+	for _, el := range elements {
+		if !s.Contains(el) {
+			t.Errorf("%s: Set should contain element '%v', but it doesn't. Set: %s", opName, el, s.String())
+		}
 	}
 }
