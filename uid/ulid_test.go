@@ -22,7 +22,7 @@ func TestGenerate_Format(t *testing.T) {
 
 	// 1. 检查长度
 	if len(id) != encodedSize {
-		t.Errorf("Generate() aULID长度错误，期望 %d, 得到 %d", encodedSize, len(id))
+		t.Errorf("NewID() aULID长度错误，期望 %d, 得到 %d", encodedSize, len(id))
 	}
 
 	// 2. 使用正则表达式检查字符集
@@ -33,7 +33,7 @@ func TestGenerate_Format(t *testing.T) {
 		t.Fatalf("正则表达式匹配失败: %v", err)
 	}
 	if !match {
-		t.Errorf("Generate() 生成的ULID '%s' 包含无效字符", id)
+		t.Errorf("NewID() 生成的ULID '%s' 包含无效字符", id)
 	}
 }
 
