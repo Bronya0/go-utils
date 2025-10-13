@@ -8,18 +8,18 @@ Golang安全的操作函数
 // go get github.com/Bronya0/go-utils
 // 按需导入
 import(
-    "github.com/Bronya0/go-utils/ziputil"
     "github.com/Bronya0/go-utils/fileutil"
     "github.com/Bronya0/go-utils/strutil"
+    "github.com/Bronya0/go-utils/container"
+    "github.com/Bronya0/go-utils/convert"
+    "github.com/Bronya0/go-utils/timeutil"
+    "github.com/Bronya0/go-utils/uid"
+    "github.com/Bronya0/go-utils/validator"
     ...
 )
 ```
 
 ## 函数说明
-
-### ziputil 包
-
-- `UnzipSafe`: 安全解压ZIP文件，防御路径遍历、解压炸弹等攻击
 
 ### fileutil 包
 
@@ -28,6 +28,7 @@ import(
 - `HashBytes`: 对字节切片进行流式哈希计算
 - `HashFile`: 对文件进行流式哈希计算
 - 其他常用的`目录、文件`函数
+- `ZipFiles`、`UnzipSafe`等: 安全压缩解压ZIP文件，防御路径遍历、解压炸弹等攻击
 
 ### strutil 包
 
