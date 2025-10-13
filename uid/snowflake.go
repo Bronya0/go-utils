@@ -33,8 +33,8 @@ const (
 )
 
 // Epoch 是雪花ID算法的起始时间戳（毫秒）。
-// 这个值一旦确定，就不能再更改。默认使用 Twitter 的起始时间。
-var Epoch int64 = 1288834974657
+// 这个值一旦确定，就不能再更改。2025-10-01 00:00:00
+var Epoch int64 = 1759248000000
 
 // SnowflakeNode 代表一个雪花ID生成器节点。
 type SnowflakeNode struct {
