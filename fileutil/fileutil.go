@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -31,6 +32,48 @@ func IsFile(path string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+// ListDir 非递归读取目录。返回文件列表和目录列表
+func ListDir(dirPath string) ([]string, []string, error) {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var files []string
+	var dirs []string
+
+	for _, entry := range entries {
+		fullPath := filepath.Join(dirPath, entry.Name())
+		if entry.IsDir() {
+			dirs = append(dirs, fullPath)
+		} else {
+			files = append(files, fullPath)
+		}
+	}
+
+	return files, dirs, nil
+}
+
+// ListDirRecursively 递归遍历目录。返回找到的所有文件的列表。
+func ListDirRecursively(root string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		// 只添加文件，并跳过目录
+		if !d.IsDir() {
+			files = append(files, path)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return files, nil
 }
 
 // FileSize 获取文件大小（字节数）
